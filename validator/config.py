@@ -270,6 +270,16 @@ PASS1_MATCH_DQ_THRESHOLD: float = float(
 this fraction before teacher-forcing. Below threshold, miner is DQ'd without
 scoring. Not the authoritative correctness gate (teacher-forcing is)."""
 
+PASS1_TEXT_SIM_DQ_THRESHOLD: float = float(
+    os.environ.get("CACHEON_PASS1_TEXT_SIM_DQ_THRESHOLD", "0.90")
+)
+"""Pass 1 fidelity gate on decoded text rather than tokens. Baseline and miner
+outputs are compared as plain text (tokenizer agnostic), so framework
+tokenization differences (e.g. SGLang vs vLLM) no longer lower the score and
+the gate can stay strict: correct greedy output of the same model is near
+identical as text, while a divergent (but plausible) output is caught before
+it reaches teacher-forcing."""
+
 VLLM_COMPILE_CACHE_DIR: str = os.environ.get("CACHEON_VLLM_CACHE_DIR", "")
 """Host directory mounted into Pass 1 baseline container at /root/.cache/vllm.
 Empty disables the mount. Auto-rent on Targon sets /workspace/vllm-cache;
