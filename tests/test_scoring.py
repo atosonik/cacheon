@@ -16,7 +16,6 @@ from validator.scoring import (
     compute_teacher_forcing_verdict,
     compute_text_similarity,
     compute_token_match_rate,
-    pass1_match_passes,
     pass1_text_sim_passes,
 )
 
@@ -145,12 +144,6 @@ class TestPass1MatchGate:
         base = [["a", "b"], ["x", "y"]]
         miner = [["a", "b"], ["x", "z"]]
         assert compute_pass1_aggregate_match(base, miner) == pytest.approx(0.75)
-
-    def test_pass_at_threshold(self):
-        assert pass1_match_passes(0.25, 0.25) is True
-
-    def test_fail_below_threshold(self):
-        assert pass1_match_passes(0.24, 0.25) is False
 
 
 # --------------------------------------------------------------------------- #

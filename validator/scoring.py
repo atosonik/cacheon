@@ -125,11 +125,6 @@ def compute_pass1_aggregate_match(
     return statistics.mean(rates)
 
 
-def pass1_match_passes(aggregate_match: float, threshold: float) -> bool:
-    """Return True when aggregate match meets or exceeds the Pass 1 gate."""
-    return aggregate_match >= threshold
-
-
 def compute_text_similarity(baseline_text: str, miner_text: str) -> float:
     """Character-level similarity of two outputs as plain text (0.0 -- 1.0).
 
