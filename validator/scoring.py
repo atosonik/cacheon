@@ -130,12 +130,6 @@ def pass1_match_passes(aggregate_match: float, threshold: float) -> bool:
     return aggregate_match >= threshold
 
 
-def _normalize_text(text: str) -> str:
-    """Collapse runs of whitespace and strip, so framework-level whitespace
-    chunking differences do not change the similarity."""
-    return " ".join(text.split())
-
-
 def compute_text_similarity(baseline_text: str, miner_text: str) -> float:
     """Character-level similarity of two outputs as plain text (0.0 -- 1.0).
 
@@ -143,12 +137,17 @@ def compute_text_similarity(baseline_text: str, miner_text: str) -> float:
     two correct greedy outputs of the same model are near identical as text
     no matter which framework (vLLM, SGLang) produced them, while a divergent
     output is clearly different.
+
+    Only leading and trailing whitespace is trimmed; internal newlines and
+    tabs are kept so a miner that strips formatting (e.g. from code or
+    markdown) does not match a properly formatted baseline. ``autojunk`` is
+    disabled so the ratio is deterministic regardless of output length.
     """
-    base = _normalize_text(baseline_text)
-    miner = _normalize_text(miner_text)
+    base = baseline_text.strip()
+    miner = miner_text.strip()
     if not base and not miner:
         return 1.0
-    return SequenceMatcher(None, base, miner).ratio()
+    return SequenceMatcher(None, base, miner, autojunk=False).ratio()
 
 
 def compute_pass1_text_similarity(

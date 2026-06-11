@@ -162,8 +162,13 @@ class TestTextSimilarity:
     def test_identical_text(self):
         assert compute_text_similarity("Hello world", "Hello world") == 1.0
 
-    def test_identical_text_different_whitespace(self):
-        assert compute_text_similarity("Hello   world", "Hello world") == 1.0
+    def test_leading_trailing_whitespace_ignored(self):
+        assert compute_text_similarity("  Hello world\n", "Hello world") == 1.0
+
+    def test_internal_formatting_is_significant(self):
+        # Newlines and tabs are preserved, so stripping formatting no longer
+        # scores as identical against a properly formatted baseline.
+        assert compute_text_similarity("a\nb\nc", "abc") < 1.0
 
     def test_both_empty(self):
         assert compute_text_similarity("", "") == 1.0
