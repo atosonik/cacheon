@@ -270,6 +270,17 @@ PASS1_MATCH_DQ_THRESHOLD: float = float(
 this fraction before teacher-forcing. Below threshold, miner is DQ'd without
 scoring. Not the authoritative correctness gate (teacher-forcing is)."""
 
+CANONICAL_MATCH_DQ_THRESHOLD: float = float(
+    os.environ.get("CACHEON_CANONICAL_MATCH_DQ_THRESHOLD", "0.90")
+)
+"""Greedy-fidelity gate run during the scoring pass. Baseline and miner output
+text are re-tokenized with the same scoring vLLM tokenizer, then matched
+positionally. Because both sides use one canonical tokenizer, framework
+tokenization differences (e.g. SGLang vs vLLM) no longer lower the rate, so
+this can stay strict: correct greedy output of the same model matches close to
+1.0, while a divergent (but plausible) output is caught even when it slips past
+the cheap token pre-filter and the teacher-forcing logprob check."""
+
 VLLM_COMPILE_CACHE_DIR: str = os.environ.get("CACHEON_VLLM_CACHE_DIR", "")
 """Host directory mounted into Pass 1 baseline container at /root/.cache/vllm.
 Empty disables the mount. Auto-rent on Targon sets /workspace/vllm-cache;

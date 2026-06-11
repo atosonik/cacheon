@@ -109,6 +109,31 @@ def compute_token_match_rate(
     return matches / total
 
 
+def compute_canonical_token_match(
+    baseline_ids: list[int],
+    miner_ids: list[int],
+) -> float:
+    """Positional match rate between two canonical token id sequences.
+
+    Both sequences come from re-tokenizing decoded text with the same
+    reference tokenizer (the scoring vLLM), so framework tokenization
+    differences (e.g. SGLang vs vLLM) cancel out and the rate reflects
+    real output divergence rather than token boundary noise.
+
+    Length mismatch: positions beyond the shorter list count as mismatches.
+    """
+    if not baseline_ids and not miner_ids:
+        return 1.0
+    total = max(len(baseline_ids), len(miner_ids))
+    matches = sum(b == m for b, m in zip(baseline_ids, miner_ids))
+    return matches / total
+
+
+def canonical_match_passes(match_rate: float, threshold: float) -> bool:
+    """Return True when canonical token match meets or exceeds the gate."""
+    return match_rate >= threshold
+
+
 def compute_pass1_aggregate_match(
     baseline_tokens_list: list[list[str]],
     miner_tokens_list: list[list[str]],

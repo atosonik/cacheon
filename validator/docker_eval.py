@@ -24,6 +24,8 @@ from .eval_schema import PerPromptResult, Prompt
 from .scoring import (
     aligned_e2e_improvement,
     aligned_e2e_seconds,
+    canonical_match_passes,
+    compute_canonical_token_match,
     compute_pass1_aggregate_match,
     compute_speed_improvement,
     compute_teacher_forcing_verdict,
@@ -729,6 +731,33 @@ def _tokenize(
     return json.loads(resp.read().decode("utf-8", errors="replace")).get("tokens", [])
 
 
+def canonical_assistant_token_ids(
+    base_url: str,
+    messages: list[dict[str, str]],
+    output_text: str,
+    timeout_s: float = 60,
+) -> list[int]:
+    """Token ids of ``output_text`` as the assistant turn, via the scoring vLLM.
+
+    Tokenizes the prompt alone and the prompt plus assistant output, then
+    returns the assistant-only suffix. Using the same scoring tokenizer for
+    both baseline and miner text removes framework tokenization differences.
+    Returns an empty list on empty text or any /tokenize failure.
+    """
+    if not output_text or not output_text.strip():
+        return []
+    scoring_messages = list(messages) + [{"role": "assistant", "content": output_text}]
+    try:
+        prefix_ids = _tokenize(base_url, messages, timeout_s)
+        full_ids = _tokenize(base_url, scoring_messages, timeout_s)
+    except Exception as exc:
+        logger.warning("canonical /tokenize failed: %s", exc)
+        return []
+    if len(full_ids) <= len(prefix_ids):
+        return []
+    return full_ids[len(prefix_ids) :]
+
+
 def _trim_messages_to_fit(
     base_url: str,
     messages: list[dict[str, str]],
@@ -926,11 +955,21 @@ def score_challenger_teacher_forcing(
     miner_tokens_list: list[list[str]],
     *,
     log_prefix: str = "",
+    baseline_output_texts: list[str] | None = None,
 ) -> tuple[bool, list[str], list[float]]:
     """Teacher-forcing correctness for Pass 2 prompts.
 
     Returns ``(passed, fail_reasons, per_prompt_mean_logprobs)``.
     Stops at the first failed prompt (same as prod gpu_eval).
+
+    When ``baseline_output_texts`` is provided, a canonical token match gate
+    runs first per prompt: baseline and miner output text are re-tokenized
+    with this scoring vLLM and matched positionally. Below
+    ``CANONICAL_MATCH_DQ_THRESHOLD`` the miner is DQ'd. This catches outputs
+    that diverge from the greedy baseline yet stay plausible under
+    teacher-forcing logprobs, without penalizing framework tokenization
+    differences (the gate the cheap stream-token pre-filter could not make
+    strict).
     """
     n_prompts = min(
         len(output_texts),
@@ -944,6 +983,33 @@ def score_challenger_teacher_forcing(
         msgs = [
             {"role": m.role, "content": m.content} for m in scored_prompts[i].messages
         ]
+
+        if baseline_output_texts is not None and i < len(baseline_output_texts):
+            base_ids = canonical_assistant_token_ids(
+                scoring_url, msgs, baseline_output_texts[i]
+            )
+            if base_ids:
+                miner_ids = canonical_assistant_token_ids(
+                    scoring_url, msgs, output_texts[i]
+                )
+                canon_match = compute_canonical_token_match(base_ids, miner_ids)
+                threshold = validator_config.CANONICAL_MATCH_DQ_THRESHOLD
+                logger.info(
+                    "%sprompt %d: canonical match=%.4f (baseline=%d miner=%d tokens)",
+                    f"{log_prefix} " if log_prefix else "",
+                    i,
+                    canon_match,
+                    len(base_ids),
+                    len(miner_ids),
+                )
+                if not canonical_match_passes(canon_match, threshold):
+                    reason = (
+                        f"prompt {i}: pass1_canonical_match_fail: canonical match "
+                        f"{canon_match:.4f} below threshold {threshold}"
+                    )
+                    fail_reasons.append(reason)
+                    return False, fail_reasons, mean_logprobs
+
         challenger_stream_token_count = len(miner_tokens_list[i])
         label = f"{log_prefix} " if log_prefix else ""
         logger.info(

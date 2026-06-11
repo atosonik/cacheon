@@ -301,12 +301,14 @@ def main() -> int:
         scoring_url: str, pending: _PendingTeacherForcing
     ) -> EvaluationRecord:
         record = pending.record
+        baseline_output_texts = ["".join(r.tokens) for r in eval_baseline.results]
         passed, fail_reasons, _ = score_challenger_teacher_forcing(
             scoring_url,
             scored_eval_prompts,
             pending.tf_output_texts,
             pending.tf_miner_tokens,
             log_prefix=pending.log_prefix,
+            baseline_output_texts=baseline_output_texts,
         )
         if passed:
             return record

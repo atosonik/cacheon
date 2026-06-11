@@ -9,6 +9,8 @@ from validator.scoring import (
     SPEED_TOLERANCE_RATIO,
     aligned_e2e_improvement,
     aligned_e2e_seconds,
+    canonical_match_passes,
+    compute_canonical_token_match,
     compute_correctness,
     compute_pass1_aggregate_match,
     compute_speed_improvement,
@@ -148,6 +150,36 @@ class TestPass1MatchGate:
 
     def test_fail_below_threshold(self):
         assert pass1_match_passes(0.24, 0.25) is False
+
+
+# --------------------------------------------------------------------------- #
+# Canonical token match gate (re-tokenized fidelity check)
+# --------------------------------------------------------------------------- #
+
+
+class TestCanonicalTokenMatch:
+    def test_identical_ids(self):
+        ids = [10, 20, 30, 40]
+        assert compute_canonical_token_match(ids, ids) == 1.0
+
+    def test_empty_both(self):
+        assert compute_canonical_token_match([], []) == 1.0
+
+    def test_divergent_output_scores_low(self):
+        base = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        miner = [1, 2, 99, 98, 97, 96, 95, 94, 93, 92]
+        assert compute_canonical_token_match(base, miner) == pytest.approx(0.2)
+
+    def test_shorter_miner_counts_gap_as_mismatch(self):
+        base = [1, 2, 3, 4]
+        miner = [1, 2]
+        assert compute_canonical_token_match(base, miner) == pytest.approx(0.5)
+
+    def test_gate_pass_at_threshold(self):
+        assert canonical_match_passes(0.90, 0.90) is True
+
+    def test_gate_fail_below_threshold(self):
+        assert canonical_match_passes(0.89, 0.90) is False
 
 
 # --------------------------------------------------------------------------- #
